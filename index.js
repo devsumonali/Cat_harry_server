@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import 'dotenv/config';
 
 // express import
@@ -29,7 +29,13 @@ export async function connectToMongoDB() {
 const connectClient = await connectToMongoDB();
 const db = connectClient.db('studiospace_db');
 const studiosCollection = db.collection('studios');
-// const categoriesCollection = db.collection('categories');
+const categoriesCollection = db.collection('categories');
+
+//category api
+app.get('/api/categories', async (req, res) => {
+     const result = await categoriesCollection.find().toArray();
+     res.send(result);
+});
 
 //studios data post
 app.post('/api/studios', async (req, res) => {
@@ -45,16 +51,12 @@ app.get('/api/studios', async (req, res) => {
      const result = await studiosCollection.find().toArray();
      res.send(result);
 });
-//data post
-app.post('/api/studios', async (req, res) => {
-     const studiosData = req.body;
-     const result = await studiosCollection.insertOne(studiosData);
-     res.send(result);
-});
 
-//create api
-app.get('/api/studios', async (req, res) => {
-     const result = await studiosCollection.find().toArray();
+// Get single studio by ID
+app.get('/api/studios/:id', async (req, res) => {
+     const id = req.params.id;
+     const result = await studiosCollection.findOne({ _id: new ObjectId(id) });
+
      res.send(result);
 });
 
