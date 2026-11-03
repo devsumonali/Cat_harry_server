@@ -30,6 +30,22 @@ const connectClient = await connectToMongoDB();
 const db = connectClient.db('studiospace_db');
 const studiosCollection = db.collection('studios');
 const categoriesCollection = db.collection('categories');
+const studiosBookingCollection = db.collection('studiosBooking');
+
+//booking api create
+app.post('/api/studios/booking', async (req, res) => {
+     const bookingData = req.body;
+     const result = await studiosBookingCollection.insertOne(bookingData);
+     res.send(result);
+});
+
+//single category api
+app.get('/api/categories/:slug/studios', async (req, res) => {
+     const slug = req.params.slug;
+     const result = await studiosCollection.find({ category: slug }).toArray();
+
+     res.send(result);
+});
 
 //category api
 app.get('/api/categories', async (req, res) => {
