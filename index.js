@@ -7,10 +7,46 @@ import { client, db } from './mongodb.mjs';
 import { uploadImage } from './upload.mjs';
 import 'dotenv/config';
 import { createDashboardHandlers } from './dashboard-handlers.mjs';
+import { createJwt, jwtCookieName, jwtCookieOptions, verifyJwt } from './jwt.mjs';
 
 const app = express();
 const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
 app.use(cors({ origin: frontend, credentials: true }));
+async function getSession(req) {
+     return auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+}
+
+function trustedMutationOrigin(req, res) {
+     if (req.get('origin') === frontend) return true;
+     res.status(403).json({ message: 'Untrusted request origin.' });
+     return false;
+}
+
+function cookieValue(req, name) {
+     const prefix = `${name}=`;
+     const value = (req.get('cookie') || '')
+          .split(';')
+          .map((item) => item.trim())
+          .find((item) => item.startsWith(prefix));
+     return value ? decodeURIComponent(value.slice(prefix.length)) : undefined;
+}
+
+app.post('/api/auth/jwt', async (req, res) => {
+     if (!trustedMutationOrigin(req, res)) return;
+     try {
+          const session = await getSession(req);
+          if (!session?.user) return res.status(401).json({ message: 'Please log in.' });
+          res.cookie(jwtCookieName, createJwt(session.user), jwtCookieOptions).json({ success: true });
+     } catch {
+          res.status(503).json({ message: 'Authentication service unavailable.' });
+     }
+});
+
+app.delete('/api/auth/jwt', (req, res) => {
+     if (!trustedMutationOrigin(req, res)) return;
+     res.clearCookie(jwtCookieName, jwtCookieOptions).json({ success: true });
+});
+
 // Better Auth consumes the raw request body, before express.json().
 app.all('/api/auth/*splat', toNodeHandler(auth));
 app.use(express.json({ limit: '1mb' }));
@@ -22,12 +58,14 @@ const validId = (id) => typeof id === 'string' && /^[a-f\d]{24}$/i.test(id);
 
 // Validate sessions directly in the backend.
 async function requireUser(req, res, next) {
-     if (!['GET', 'HEAD'].includes(req.method) && req.get('origin') !== frontend) {
-          return res.status(403).json({ message: 'Untrusted request origin.' });
-     }
+     if (!['GET', 'HEAD'].includes(req.method) && !trustedMutationOrigin(req, res)) return;
      try {
-          const session = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+          const jwtUser = verifyJwt(cookieValue(req, jwtCookieName));
+          if (!jwtUser) return res.status(401).json({ message: 'Please log in.' });
+          const session = await getSession(req);
           if (!session?.user) return res.status(401).json({ message: 'Please log in.' });
+          if (session.user.id !== jwtUser.id || session.user.email !== jwtUser.email)
+               return res.status(401).json({ message: 'Please log in.' });
           req.user = session.user;
           next();
      } catch {
@@ -193,8 +231,7 @@ app.get('/api/studios/:id', async (req, res, next) => {
 app.get('/api/dashboard', requireUser, dashboardHandler('GET'));
 app.post('/api/dashboard', requireUser, dashboardHandler('POST'));
 app.post('/api/newsletter', async (req, res, next) => {
-     if (req.get('origin') !== frontend)
-          return res.status(403).json({ message: 'Untrusted request origin.' });
+     if (!trustedMutationOrigin(req, res)) return;
      const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
      if (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
           return res.status(400).json({ message: 'Enter a valid email address.' });

@@ -6,7 +6,7 @@ All API handlers, Better Auth, MongoDB access and ImgBB uploads run in this fold
 
 Use Node.js 20 or newer. Install dependencies with `npm install`, configure `.env` from `.env.example`, and start with `npm start` (or `npm run dev`). Preserve existing secrets. The frontend runs separately on port 3000.
 
-Set `BETTER_AUTH_URL` and `FRONTEND_URL` to the public frontend origin. Next.js forwards `/api/*` to Express using `BACKEND_API_URL`, so browser cookies stay on the frontend origin. Register the Google callback as `http://localhost:3000/api/auth/callback/google` locally. Keep database, OAuth, auth-signing and ImgBB secrets only in this backend.
+Set `BETTER_AUTH_URL` and `FRONTEND_URL` to the public frontend origin. Set a strong, private `JWT_SECRET` (at least 32 characters) in both local and deployed backend environments. Next.js forwards `/api/*` to Express using `BACKEND_API_URL`, so browser cookies stay on the frontend origin. Register the Google callback as `http://localhost:3000/api/auth/callback/google` locally. Keep database, OAuth, auth-signing, JWT and ImgBB secrets only in this backend.
 
 ## Endpoints
 
@@ -17,6 +17,7 @@ Set `BETTER_AUTH_URL` and `FRONTEND_URL` to the public frontend origin. Next.js 
 | GET /api/studios/:id | Public details, including stored images/host/reviews |
 | GET /api/categories | Public categories |
 | GET /api/categories/:slug/studios | Public category listings |
+| POST /api/auth/jwt | Issue the HTTPOnly JWT cookie for an authenticated Better Auth session |
 | POST /api/studios | Create studio with session-derived owner name/email/ID |
 | PATCH /api/studios/:id | Update an owned studio |
 | DELETE /api/studios/:id | Delete an owned studio without active bookings |
@@ -34,7 +35,7 @@ Specific routes are registered before /api/studios/:id.
 
 Authentication endpoints: `/api/auth/*`. Image uploads: `POST /api/upload` (authenticated multipart image, maximum 5 MB).
 
-Express verifies sessions directly with Better Auth and enforces ownership and allowed origins.
+Express issues a short-lived JWT in a HTTPOnly cookie after Better Auth login, then validates both the JWT and Better Auth session for private API access. It also enforces ownership and allowed origins.
 
 ## Data and booking behavior
 
